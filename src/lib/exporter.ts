@@ -23,6 +23,17 @@ function formatDate(dateStr: string): string {
   return `${d}/${m}/${y}`;
 }
 
+const LEAVE_PATTERNS = [
+  "leave", "holiday", "weekend off", "vacation", "pto",
+  "day off", "comp off", "absent",
+];
+
+function isLeaveOrHoliday(task: string): boolean {
+  if (!task) return false;
+  const lower = task.toLowerCase();
+  return LEAVE_PATTERNS.some((p) => lower.includes(p));
+}
+
 /**
  * Exports entries into a Timelogs.xlsx matching the exact target format:
  *
@@ -52,6 +63,13 @@ export function exportTimelogs(
   const rows = sorted.map((e) => {
     const cfg = configMap.get(e.name);
     const isClientCalls = (e.jobName || "").toLowerCase() === "client calls";
+    const isWorkTask = !isLeaveOrHoliday(e.task);
+    const workItem = isClientCalls
+      ? (e.task || e.jiraId)
+      : (e.jiraId || (isWorkTask ? e.task : ""));
+    const description = isClientCalls
+      ? ""
+      : (e.jiraId ? e.task : (isLeaveOrHoliday(e.task) ? e.task : ""));
     return {
       "Date": formatDate(e.date),
       "Client Name": cfg?.clientName || "",
@@ -61,7 +79,7 @@ export function exportTimelogs(
       "Mail ID": cfg?.email || "",
       "First name": cfg?.firstName || "",
       "Last name": cfg?.lastName || "",
-      "Work Item": isClientCalls ? (e.task || e.jiraId) : e.jiraId,
+      "Work Item": workItem,
       "From time": "",
       "To time": "",
       "Timer Intervals": "",
@@ -69,7 +87,7 @@ export function exportTimelogs(
       "Hours(HH:MM)": toHHMM(e.effort),
       "Billable Status": e.billing || "Billable",
       "Approval": "",
-      "Description": isClientCalls ? "" : e.task,
+      "Description": description,
     };
   });
 
