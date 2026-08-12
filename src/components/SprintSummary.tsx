@@ -41,8 +41,8 @@ export default function SprintSummary({ entries }: SprintSummaryProps) {
   }, [entries, startDate, endDate, selectedUser, selectedSprint]);
 
   const handleCopy = async () => {
-    if (summary?.formatted) {
-      await navigator.clipboard.writeText(summary.formatted);
+    if (summary?.clipboardFormatted) {
+      await navigator.clipboard.writeText(summary.clipboardFormatted);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }

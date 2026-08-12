@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import { ChevronDown, ChevronUp, Filter, X } from "lucide-react";
 import type { TimelogEntry } from "../lib/types";
+import { isLeaveOrHoliday } from "../lib/filters";
 
 interface TimelogTableProps {
   entries: TimelogEntry[];
@@ -14,18 +15,6 @@ const JOB_NAME_OPTIONS = [
   "Internal Calls",
   "Training",
 ];
-
-const LEAVE_PATTERNS = [
-  "leave", "holiday", "weekend off", "vacation", "pto",
-  "day off", "comp off", "absent",
-];
-
-function isLeaveOrHoliday(entry: TimelogEntry): boolean {
-  const task = entry.task.toLowerCase();
-  if (LEAVE_PATTERNS.some((p) => task.includes(p))) return true;
-  if (!entry.jiraId && entry.effort === 0 && task) return true;
-  return false;
-}
 
 const BILLING_OPTIONS = ["Billable", "Non-Billable"];
 
@@ -122,6 +111,34 @@ export default function TimelogTable({ entries, onFilteredEntriesChange, onUpdat
   };
 
   const totalEffort = sorted.reduce((sum, e) => sum + e.effort, 0);
+
+  type IndexedEntry = TimelogEntry & { _idx: number };
+
+  const dateGroups = useMemo(() => {
+    const groups: {
+      date: string;
+      day: string;
+      entries: IndexedEntry[];
+      totalEffort: number;
+    }[] = [];
+
+    for (const entry of sorted) {
+      const last = groups[groups.length - 1];
+      if (last && last.date === entry.date) {
+        last.entries.push(entry);
+        last.totalEffort += entry.effort;
+      } else {
+        groups.push({
+          date: entry.date,
+          day: entry.day,
+          entries: [entry],
+          totalEffort: entry.effort,
+        });
+      }
+    }
+
+    return groups;
+  }, [sorted]);
 
   return (
     <div className="space-y-4">
@@ -221,7 +238,9 @@ export default function TimelogTable({ entries, onFilteredEntriesChange, onUpdat
             </tr>
           </thead>
           <tbody>
-            {sorted.map((entry) => (
+            {dateGroups.map((group) => (
+              <Fragment key={`${group.date}-${group.entries[0]._idx}`}>
+                {group.entries.map((entry) => (
               <tr
                 key={entry._idx}
                 className="border-t border-gray-100 hover:bg-blue-50/50 transition-colors"
@@ -289,6 +308,17 @@ export default function TimelogTable({ entries, onFilteredEntriesChange, onUpdat
                   {entry.sprint}
                 </td>
               </tr>
+                ))}
+                <tr className="bg-gray-50 border-t border-gray-200">
+                  <td colSpan={6} className="px-4 py-2 text-right text-xs font-medium text-gray-500">
+                    Daily total — {group.date} ({group.day})
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono font-semibold text-gray-800 whitespace-nowrap">
+                    {group.totalEffort}h
+                  </td>
+                  <td colSpan={3} />
+                </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -306,7 +336,9 @@ export default function TimelogTable({ entries, onFilteredEntriesChange, onUpdat
             No entries match the current filters.
           </div>
         )}
-        {sorted.map((entry) => (
+        {dateGroups.map((group) => (
+          <div key={`${group.date}-${group.entries[0]._idx}`} className="space-y-3">
+            {group.entries.map((entry) => (
           <div
             key={entry._idx}
             className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3"
@@ -366,6 +398,13 @@ export default function TimelogTable({ entries, onFilteredEntriesChange, onUpdat
                   ))}
                 </select>
               </div>
+            </div>
+          </div>
+            ))}
+            <div className="flex justify-end px-1">
+              <span className="text-sm font-semibold text-gray-700">
+                Daily total — {group.date}: {group.totalEffort}h
+              </span>
             </div>
           </div>
         ))}

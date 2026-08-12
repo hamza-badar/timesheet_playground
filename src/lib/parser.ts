@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import dayjs from "dayjs";
 import type { TimelogEntry, SheetMeta, UserMeta } from "./types";
+import { textMatchesLeavePattern } from "./filters";
 
 /**
  * Dynamically detects user blocks from the sheet structure.
@@ -227,13 +228,7 @@ function parseUserBlock(
 
     if (!task && !jiraId && effort === 0) continue;
 
-    const lowerTask = task.toLowerCase();
-    if (
-      effort === 0 &&
-      (lowerTask === "weekend off" ||
-        lowerTask === "holiday" ||
-        lowerTask.includes("holiday"))
-    ) {
+    if (textMatchesLeavePattern(task) || textMatchesLeavePattern(jiraId)) {
       continue;
     }
 

@@ -24,7 +24,7 @@ export function generateSprintSummary(
   endDate: string,
   userName?: string,
   sprint?: string
-): { items: SprintSummaryItem[]; formatted: string } {
+): { items: SprintSummaryItem[]; formatted: string; clipboardFormatted: string } {
   const start = dayjs(startDate);
   const end = dayjs(endDate);
 
@@ -122,7 +122,21 @@ export function generateSprintSummary(
   });
 
   const formatted = formatSummary(items, startDate, endDate);
-  return { items, formatted };
+  const clipboardFormatted = formatSummaryForClipboard(items);
+  return { items, formatted, clipboardFormatted };
+}
+
+export function formatSummaryForClipboard(items: SprintSummaryItem[]): string {
+  if (items.length === 0) {
+    return "No completed deliverables found for the selected date range.";
+  }
+
+  return items
+    .map((item) => {
+      const jiraPart = item.jiraId ? `[${item.jiraId}] ` : "";
+      return `  • ${jiraPart}${item.task}`;
+    })
+    .join("\n");
 }
 
 export function getSprintsInRange(
