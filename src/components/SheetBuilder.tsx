@@ -39,7 +39,7 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
   const [jiraId, setJiraId] = useState("");
   const [task, setTask] = useState("");
   const [effort, setEffort] = useState("");
-  const [status, setStatus] = useState("IN-PROGRESS");
+  const [status, setStatus] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -117,7 +117,7 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
     setJiraId(row.jiraId);
     setTask(row.task);
     setEffort(row.effort ? String(row.effort) : "");
-    setStatus(row.status || "IN-PROGRESS");
+    setStatus(row.status || "");
     jiraRef.current?.focus();
   };
 
@@ -279,8 +279,8 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
               className="field-input"
             >
               {SHEET_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+                <option key={s.label} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </select>
@@ -297,7 +297,7 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
           </div>
         </div>
         <p className="text-xs text-faint">
-          Plus keeps date and status. Change sprint per ticket when needed. Jira, task, and hours clear for the next line.
+          Plus keeps date and status. Use None for meetings with no status. Change sprint per ticket when needed. Jira, task, and hours clear for the next line.
         </p>
       </div>
 

@@ -18,15 +18,14 @@ export interface SheetFeedState {
 }
 
 export const SHEET_STATUSES = [
-  "DONE",
-  "IN-PROGRESS",
-  "QA",
-  "STAGE",
-  "PROD",
-  "PR-IN-REVIEW",
-  "DEV-COMPLETED",
-  "Done",
-  "InProgress",
+  { value: "", label: "None" },
+  { value: "DONE", label: "DONE" },
+  { value: "IN-PROGRESS", label: "IN-PROGRESS" },
+  { value: "QA", label: "QA" },
+  { value: "STAGE", label: "STAGE" },
+  { value: "PROD", label: "PROD" },
+  { value: "PR-IN-REVIEW", label: "PR-IN-REVIEW" },
+  { value: "DEV-COMPLETED", label: "DEV-COMPLETED" },
 ] as const;
 
 export const FEED_HEADERS = [
