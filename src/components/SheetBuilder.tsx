@@ -678,7 +678,11 @@ export default function SheetBuilder({
             {editingId ? "Edit line" : "Add line"}
           </h3>
           <p className="text-xs text-muted">
-            {date ? `${dayjs(date).format("ddd D MMM")} · ${dayHours}h logged` : "Pick a date"}
+            {date
+              ? `${dayjs(date).format("ddd D MMM")} · ${dayHours}h logged · ${
+                  Math.round((8 - dayHours) * 100) / 100
+                }h left`
+              : "Pick a date"}
           </p>
         </div>
 
@@ -815,10 +819,15 @@ export default function SheetBuilder({
                     : row.kind === "leave"
                       ? "sheet-row-leave"
                       : "sheet-row-work";
+                const isLastOfDay =
+                  idx === built.length - 1 ||
+                  built[idx + 1].dateIso !== row.dateIso;
                 return (
                   <tr
                     key={`${row.dateIso}-${idx}`}
-                    className={`border-t border-line ${rowClass}`}
+                    className={`border-t border-line ${
+                      isLastOfDay ? "border-b-2 border-b-ink/35" : ""
+                    } ${rowClass}`}
                   >
                     <td className="px-3 py-1.5 whitespace-nowrap text-ink">
                       {row.date ? dayjs(row.date).format("D-MMM-YY") : ""}
