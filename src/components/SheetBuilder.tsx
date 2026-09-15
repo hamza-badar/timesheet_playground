@@ -7,25 +7,70 @@ import {
   Pencil,
   Check,
   CalendarDays,
+  FileSpreadsheet,
+  UserRound,
+  X,
 } from "lucide-react";
 import dayjs from "dayjs";
 import {
   SHEET_STATUSES,
   buildMonthRows,
+  isExportableFeedRow,
   isLeaveTask,
   loadFeed,
   loadLastFeedHint,
   newRowId,
   saveFeed,
+  sheetFeedToTimelogEntries,
   type SheetFeedRow,
 } from "../lib/sheetFeed";
 import { copyProsperBlock, exportProsperBlock } from "../lib/prosperSheetExport";
+import { exportTimelogs } from "../lib/exporter";
+import type { MemberConfig } from "../lib/types";
 
 interface SheetBuilderProps {
   knownNames?: string[];
+  memberConfigs?: MemberConfig[];
+  onConfigsChange?: (configs: MemberConfig[]) => void;
 }
 
-export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
+function resolveMemberConfig(
+  personName: string,
+  configs: MemberConfig[]
+): MemberConfig {
+  const name = personName.trim();
+  const found = configs.find((c) => c.name === name);
+  if (found) return found;
+  const parts = name.split(/\s+/).filter(Boolean);
+  return {
+    name,
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" ") || "",
+    employeeId: "",
+    email: "",
+    clientName: "",
+    projectName: "Prosper",
+  };
+}
+
+function emptyMemberConfig(name: string): MemberConfig {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    name: name.trim(),
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" ") || "",
+    employeeId: "",
+    email: "",
+    clientName: "",
+    projectName: "Prosper",
+  };
+}
+
+export default function SheetBuilder({
+  knownNames = [],
+  memberConfigs = [],
+  onConfigsChange,
+}: SheetBuilderProps) {
   const hint = useMemo(() => loadLastFeedHint(), []);
   const [personName, setPersonName] = useState(hint.personName);
   const [year, setYear] = useState(hint.year);
@@ -43,6 +88,12 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingZoho, setExportingZoho] = useState(false);
+  const [personPickerOpen, setPersonPickerOpen] = useState(false);
+  const [addingNewPerson, setAddingNewPerson] = useState(false);
+  const [newPersonName, setNewPersonName] = useState("");
+  const [newPersonEmail, setNewPersonEmail] = useState("");
+  const [newPersonEmployeeId, setNewPersonEmployeeId] = useState("");
   const jiraRef = useRef<HTMLInputElement>(null);
   const skipSave = useRef(true);
 
@@ -50,6 +101,14 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
     const set = new Set([...knownNames, ...hint.knownNames, personName].filter(Boolean));
     return [...set].sort();
   }, [knownNames, hint.knownNames, personName]);
+
+  const configuredMembers = useMemo(
+    () =>
+      [...memberConfigs]
+        .filter((c) => c.name.trim())
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [memberConfigs]
+  );
 
   useEffect(() => {
     skipSave.current = true;
@@ -80,6 +139,11 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
   }, [rows]);
 
   const dayHours = date ? hoursByDate.get(date) || 0 : 0;
+
+  const exportableRowCount = useMemo(
+    () => rows.filter(isExportableFeedRow).length,
+    [rows]
+  );
 
   const resetVariableFields = () => {
     setJiraId("");
@@ -135,6 +199,79 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
     }
   };
 
+  const runZohoExport = (name: string, configs: MemberConfig[]) => {
+    const entries = sheetFeedToTimelogEntries(name, rows);
+    if (entries.length === 0) return;
+
+    setExportingZoho(true);
+    try {
+      const memberPart = name.trim().replace(/\s+/g, "_") || "All";
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const filename = `Timelogs_${memberPart}_${datePart}.xlsx`;
+      const config = resolveMemberConfig(name, configs);
+      exportTimelogs(entries, [config], filename);
+    } finally {
+      setExportingZoho(false);
+    }
+  };
+
+  const assignPersonFromPicker = (name: string, configs: MemberConfig[]) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    // Keep current draft lines under the chosen person before switching.
+    saveFeed({ personName: trimmed, year, month, rows });
+    skipSave.current = true;
+    setPersonName(trimmed);
+    setPersonPickerOpen(false);
+    setAddingNewPerson(false);
+    setNewPersonName("");
+    setNewPersonEmail("");
+    setNewPersonEmployeeId("");
+    runZohoExport(trimmed, configs);
+  };
+
+  const closePersonPicker = () => {
+    setPersonPickerOpen(false);
+    setAddingNewPerson(false);
+    setNewPersonName("");
+    setNewPersonEmail("");
+    setNewPersonEmployeeId("");
+  };
+
+  const handleExportZoho = () => {
+    if (exportableRowCount === 0) return;
+    if (!personName.trim()) {
+      setAddingNewPerson(configuredMembers.length === 0);
+      setPersonPickerOpen(true);
+      return;
+    }
+    runZohoExport(personName, memberConfigs);
+  };
+
+  const handleSelectConfiguredPerson = (name: string) => {
+    assignPersonFromPicker(name, memberConfigs);
+  };
+
+  const handleAddNewPersonAndExport = () => {
+    const trimmed = newPersonName.trim();
+    if (!trimmed) return;
+
+    const nextConfig: MemberConfig = {
+      ...emptyMemberConfig(trimmed),
+      employeeId: newPersonEmployeeId.trim(),
+      email: newPersonEmail.trim(),
+    };
+    const withoutDup = memberConfigs.filter((c) => c.name !== trimmed);
+    const nextConfigs = [...withoutDup, nextConfig].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+    onConfigsChange?.(nextConfigs);
+    assignPersonFromPicker(trimmed, nextConfigs);
+  };
+
   const handleCopy = async () => {
     await copyProsperBlock({ year, month, rows });
     setCopied(true);
@@ -155,18 +292,32 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
             </h2>
             <p className="text-sm text-muted mt-2 max-w-2xl leading-relaxed">
               Add lines through the month. Date stays put when you press plus; set sprint
-              per ticket if you work across teams. Drafts save in this browser — export or
-              copy at month end and paste onto row 8 of the real timesheet.
+              per ticket if you work across teams. Drafts save in this browser — export the
+              Prosper sheet to paste onto row 8, or export Zoho Timelogs directly and skip
+              the converter step.
             </p>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2 shrink-0 justify-end">
             <button onClick={handleCopy} className="btn-secondary">
               {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
               {copied ? "Copied" : "Copy for Excel"}
             </button>
-            <button onClick={handleExport} disabled={exporting} className="btn-primary">
+            <button onClick={handleExport} disabled={exporting} className="btn-secondary">
               <Download className="w-4 h-4" />
               {exporting ? "Exporting…" : "Export sheet"}
+            </button>
+            <button
+              onClick={handleExportZoho}
+              disabled={exportingZoho || exportableRowCount === 0}
+              className="btn-primary"
+              title={
+                exportableRowCount === 0
+                  ? "Add non-leave work lines to export Zoho Timelogs"
+                  : "Export Zoho Timelogs (same format as Converter → Export Timelogs)"
+              }
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              {exportingZoho ? "Exporting…" : "Export Zoho Sheet"}
             </button>
           </div>
         </div>
@@ -202,6 +353,146 @@ export default function SheetBuilder({ knownNames = [] }: SheetBuilderProps) {
           </div>
         </div>
       </div>
+
+      {personPickerOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm"
+          onClick={closePersonPicker}
+        >
+          <div
+            className="panel w-full max-w-md p-5 sm:p-6 space-y-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="zoho-person-picker-title"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent mb-1">
+                  Zoho export
+                </p>
+                <h3
+                  id="zoho-person-picker-title"
+                  className="display-title text-xl text-ink flex items-center gap-2"
+                >
+                  <UserRound className="w-5 h-5 text-accent" />
+                  Choose a person
+                </h3>
+                <p className="text-sm text-muted mt-1.5 leading-relaxed">
+                  Person is empty. Pick someone from Team Member Configuration, or add a
+                  new member if none match.
+                </p>
+              </div>
+              <button
+                onClick={closePersonPicker}
+                className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-surface-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!addingNewPerson && (
+              <div className="space-y-3">
+                {configuredMembers.length > 0 ? (
+                  <ul className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                    {configuredMembers.map((member) => (
+                      <li key={member.name}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectConfiguredPerson(member.name)}
+                          className="w-full text-left rounded-xl border border-line px-3.5 py-3 hover:border-accent hover:bg-accent-soft/40 transition-colors"
+                        >
+                          <p className="font-semibold text-ink">{member.name}</p>
+                          <p className="text-xs text-muted mt-0.5 truncate">
+                            {[member.employeeId, member.email].filter(Boolean).join(" · ") ||
+                              "No employee details yet"}
+                          </p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted rounded-xl border border-dashed border-line px-4 py-6 text-center">
+                    No team members configured yet. Add a new person to continue.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setAddingNewPerson(true)}
+                  className="btn-secondary w-full"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add new member
+                </button>
+              </div>
+            )}
+
+            {addingNewPerson && (
+              <div className="space-y-3">
+                <div>
+                  <label className="field-label">Full name</label>
+                  <input
+                    autoFocus
+                    value={newPersonName}
+                    onChange={(e) => setNewPersonName(e.target.value)}
+                    placeholder="e.g. Hamza Badar"
+                    className="field-input"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddNewPersonAndExport();
+                      }
+                    }}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="field-label">Employee ID</label>
+                    <input
+                      value={newPersonEmployeeId}
+                      onChange={(e) => setNewPersonEmployeeId(e.target.value)}
+                      placeholder="Optional"
+                      className="field-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Email</label>
+                    <input
+                      type="email"
+                      value={newPersonEmail}
+                      onChange={(e) => setNewPersonEmail(e.target.value)}
+                      placeholder="Optional"
+                      className="field-input"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 justify-end pt-1">
+                  {configuredMembers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setAddingNewPerson(false)}
+                      className="btn-secondary"
+                    >
+                      Back to list
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddNewPersonAndExport}
+                    disabled={!newPersonName.trim()}
+                    className="btn-primary"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Save &amp; export
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="panel p-5 sm:p-6 space-y-4">
         <div className="flex items-center justify-between gap-3">

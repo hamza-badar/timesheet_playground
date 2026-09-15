@@ -162,7 +162,11 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {appMode === "builder" && (
-          <SheetBuilder knownNames={uniqueUsers.length ? uniqueUsers : memberConfigs.map((c) => c.name)} />
+          <SheetBuilder
+            knownNames={uniqueUsers.length ? uniqueUsers : memberConfigs.map((c) => c.name)}
+            memberConfigs={memberConfigs}
+            onConfigsChange={handleConfigsChange}
+          />
         )}
 
         {appMode === "converter" && (

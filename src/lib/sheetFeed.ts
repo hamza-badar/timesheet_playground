@@ -1,4 +1,6 @@
 import dayjs from "dayjs";
+import { textMatchesLeavePattern } from "./filters";
+import type { TimelogEntry } from "./types";
 
 export interface SheetFeedRow {
   id: string;
@@ -227,4 +229,66 @@ export function newRowId(): string {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function inferJobName(jiraId: string): string {
+  if (jiraId && jiraId.trim().length > 0) return "Development";
+  return "Client Calls";
+}
+
+function normalizeStatus(status: string): string {
+  const s = status.toUpperCase().trim();
+  if (s === "DONE" || s === "DEV-COMPLETE" || s === "PROD") return "Done";
+  if (
+    s === "INPROGRESS" ||
+    s === "IN-PROGRESS" ||
+    s === "IN-PRORESS" ||
+    s === "IN PROGRESS" ||
+    s === "IN-PORGRESS"
+  ) {
+    return "In Progress";
+  }
+  if (s === "STAGE") return "Stage";
+  if (s === "") return "";
+  return status;
+}
+
+/**
+ * Maps sheet-builder lines to TimelogEntry rows using the same rules as the
+ * converter parser (skip empty/leave, infer Job Name from Jira ID).
+ */
+export function isExportableFeedRow(row: SheetFeedRow): boolean {
+  if (!row.task && !row.jiraId && !row.effort) return false;
+  if (textMatchesLeavePattern(row.task) || textMatchesLeavePattern(row.jiraId)) {
+    return false;
+  }
+  return true;
+}
+
+export function sheetFeedToTimelogEntries(
+  personName: string,
+  rows: SheetFeedRow[]
+): TimelogEntry[] {
+  const name = personName.trim();
+  if (!name) return [];
+
+  const entries: TimelogEntry[] = [];
+  for (const row of rows) {
+    if (!isExportableFeedRow(row)) continue;
+    const d = dayjs(row.date);
+    entries.push({
+      name,
+      month: d.isValid() ? d.format("MMMM") : "",
+      date: row.date,
+      day: d.isValid() ? d.format("dddd") : "",
+      jiraId: row.jiraId,
+      task: row.task,
+      effort: row.effort || 0,
+      status: normalizeStatus(row.status),
+      sprint: row.sprint,
+      jobName: inferJobName(row.jiraId),
+      billing: "Billable",
+    });
+  }
+  return entries;
 }
