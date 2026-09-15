@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { Download, Table2, FileText, LayoutDashboard } from "lucide-react";
+import { Download, Table2, FileText, LayoutDashboard, CalendarPlus } from "lucide-react";
 import FileUpload from "./components/FileUpload";
 import TimelogTable from "./components/TimelogTable";
 import SprintSummary from "./components/SprintSummary";
 import TeamConfig from "./components/TeamConfig";
 import AddRecord from "./components/AddRecord";
+import SheetBuilder from "./components/SheetBuilder";
+import ThemeToggle from "./components/ThemeToggle";
 import { parseTimesheetWorkbook } from "./lib/parser";
 import { exportTimelogs } from "./lib/exporter";
 import type { TimelogEntry, SheetMeta, MemberConfig } from "./lib/types";
@@ -27,12 +29,14 @@ function saveConfigs(configs: MemberConfig[]) {
 }
 
 type Tab = "table" | "summary";
+type AppMode = "converter" | "builder";
 
 export default function App() {
   const [entries, setEntries] = useState<TimelogEntry[]>([]);
   const [sheetMetas, setSheetMetas] = useState<SheetMeta[]>([]);
   const [memberConfigs, setMemberConfigs] = useState<MemberConfig[]>(loadSavedConfigs);
   const [activeTab, setActiveTab] = useState<Tab>("table");
+  const [appMode, setAppMode] = useState<AppMode>("builder");
   const [isLoaded, setIsLoaded] = useState(false);
   const filteredEntriesRef = useRef<TimelogEntry[]>([]);
 
@@ -109,48 +113,68 @@ export default function App() {
   const uniqueJiraIds = [...new Set(entries.filter((e) => e.jiraId).map((e) => e.jiraId))];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+    <div className="app-shell">
+      <header className="sticky top-0 z-50 border-b border-line bg-canvas/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <LayoutDashboard className="w-6 h-6 sm:w-7 sm:h-7 text-blue-600 shrink-0" />
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border border-line bg-surface-2 text-accent shrink-0">
+                <LayoutDashboard className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
               <div className="min-w-0">
-                <h1 className="text-base sm:text-xl font-bold text-gray-900 truncate">
-                  Timesheet Converter
+                <h1 className="display-title text-lg sm:text-xl text-ink truncate">
+                  Timesheet
                 </h1>
-                <p className="text-xs text-gray-500 hidden sm:block">
-                  Prosper Timesheet to Timelogs converter & Sprint Summary generator
+                <p className="text-[11px] sm:text-xs text-muted hidden sm:block">
+                  Prosper sheet builder &amp; timelog converter
                 </p>
               </div>
             </div>
-            {isLoaded && (
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm font-medium text-xs sm:text-sm shrink-0"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Export Timelogs.xlsx</span>
-                <span className="sm:hidden">Export</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              <ThemeToggle />
+              <div className="segmented">
+                <button
+                  onClick={() => setAppMode("builder")}
+                  className={`segmented-item ${appMode === "builder" ? "segmented-item-active" : ""}`}
+                >
+                  <CalendarPlus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Sheet builder</span>
+                </button>
+                <button
+                  onClick={() => setAppMode("converter")}
+                  className={`segmented-item ${appMode === "converter" ? "segmented-item-active" : ""}`}
+                >
+                  <Table2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Converter</span>
+                </button>
+              </div>
+              {isLoaded && appMode === "converter" && (
+                <button onClick={handleExport} className="btn-primary text-xs sm:text-sm">
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Export Timelogs</span>
+                  <span className="sm:hidden">Export</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
-        {/* Upload Section */}
+        {appMode === "builder" && (
+          <SheetBuilder knownNames={uniqueUsers.length ? uniqueUsers : memberConfigs.map((c) => c.name)} />
+        )}
+
+        {appMode === "converter" && (
+        <>
         {!isLoaded && (
           <div className="max-w-2xl mx-auto">
             <FileUpload onFileLoaded={handleFileLoaded} />
           </div>
         )}
 
-        {/* Dashboard */}
         {isLoaded && (
           <>
-            {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatCard label="Team Members" value={uniqueUsers.length} />
               <StatCard label="Total Entries" value={entries.length} />
@@ -158,31 +182,26 @@ export default function App() {
               <StatCard label="Jira Tickets" value={uniqueJiraIds.length} />
             </div>
 
-            {/* Team Configuration */}
             <TeamConfig
               memberNames={uniqueUsers}
               configs={memberConfigs}
               onConfigsChange={handleConfigsChange}
             />
 
-            {/* Months Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {sheetMetas.map((meta) => (
-                <div
-                  key={meta.month}
-                  className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
-                >
-                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                <div key={meta.month} className="panel p-5">
+                  <h3 className="display-title text-lg text-ink mb-1">
                     {meta.month}
                   </h3>
-                  <p className="text-xs text-gray-500 mb-3">{meta.duration}</p>
+                  <p className="text-xs text-muted mb-3">{meta.duration}</p>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <span className="text-gray-500">Working Days</span>
-                    <span className="text-right font-medium">
+                    <span className="text-muted">Working Days</span>
+                    <span className="text-right font-medium text-ink-soft">
                       {meta.totalWorkingDays}
                     </span>
-                    <span className="text-gray-500">Team Members</span>
-                    <span className="text-right font-medium">
+                    <span className="text-muted">Team Members</span>
+                    <span className="text-right font-medium text-ink-soft">
                       {meta.users.length}
                     </span>
                   </div>
@@ -190,39 +209,28 @@ export default function App() {
               ))}
             </div>
 
-            {/* Add Record */}
             <AddRecord
               memberNames={uniqueUsers}
               onAddEntries={handleAddEntries}
             />
 
-            {/* Tabs */}
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+            <div className="segmented w-fit">
               <button
                 onClick={() => setActiveTab("table")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "table"
-                    ? "bg-white text-blue-700 shadow-sm"
-                    : "text-gray-600 hover:text-gray-800"
-                }`}
+                className={`segmented-item ${activeTab === "table" ? "segmented-item-active" : ""}`}
               >
                 <Table2 className="w-4 h-4" />
                 Timelog Table
               </button>
               <button
                 onClick={() => setActiveTab("summary")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === "summary"
-                    ? "bg-white text-blue-700 shadow-sm"
-                    : "text-gray-600 hover:text-gray-800"
-                }`}
+                className={`segmented-item ${activeTab === "summary" ? "segmented-item-active" : ""}`}
               >
                 <FileText className="w-4 h-4" />
                 Sprint Summary
               </button>
             </div>
 
-            {/* Tab Content */}
             {activeTab === "table" && (
               <TimelogTable
                 entries={entries}
@@ -232,14 +240,15 @@ export default function App() {
             )}
             {activeTab === "summary" && <SprintSummary entries={entries} />}
 
-            {/* Re-upload */}
-            <div className="pt-4 border-t border-gray-200">
-              <p className="text-sm text-gray-500 mb-3">
+            <div className="pt-4 border-t border-line">
+              <p className="text-sm text-muted mb-3">
                 Upload a different timesheet:
               </p>
               <FileUpload onFileLoaded={handleFileLoaded} />
             </div>
           </>
+        )}
+        </>
         )}
       </main>
     </div>
@@ -254,11 +263,11 @@ function StatCard({
   value: string | number;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+    <div className="stat-card">
+      <p className="text-[11px] font-semibold text-muted uppercase tracking-[0.08em]">
         {label}
       </p>
-      <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+      <p className="display-title text-2xl text-ink mt-1">{value}</p>
     </div>
   );
 }

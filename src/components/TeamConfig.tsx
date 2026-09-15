@@ -34,24 +34,24 @@ export default function TeamConfig({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="panel overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-2 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Users className="w-5 h-5 text-blue-600" />
-          <h3 className="text-base font-semibold text-gray-800">
+          <Users className="w-5 h-5 text-accent" />
+          <h3 className="display-title text-lg text-ink">
             Team Member Configuration
           </h3>
-          <span className="text-xs text-gray-400 ml-2">
+          <span className="text-xs text-faint ml-2">
             Configure fields for each team member used in the Timelogs export
           </span>
         </div>
         {expanded ? (
-          <ChevronUp className="w-5 h-5 text-gray-400" />
+          <ChevronUp className="w-5 h-5 text-faint" />
         ) : (
-          <ChevronDown className="w-5 h-5 text-gray-400" />
+          <ChevronDown className="w-5 h-5 text-faint" />
         )}
       </button>
 
@@ -62,9 +62,9 @@ export default function TeamConfig({
             return (
               <div
                 key={name}
-                className="border border-gray-200 rounded-xl p-4 space-y-3"
+                className="border border-line rounded-xl p-4 space-y-3"
               >
-                <h4 className="font-semibold text-gray-800">{name}</h4>
+                <h4 className="font-semibold text-ink">{name}</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Field
                     label="First Name"
@@ -110,11 +110,7 @@ export default function TeamConfig({
           <div className="flex justify-end">
             <button
               onClick={handleSave}
-              className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors font-medium ${
-                saved
-                  ? "bg-green-100 text-green-700"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
+              className={`btn-primary ${saved ? "!bg-success-soft !text-success" : ""}`}
             >
               <Save className="w-4 h-4" />
               {saved ? "Saved" : "Save Configuration"}
@@ -141,7 +137,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">
+      <label className="field-label">
         {label}
       </label>
       <input
@@ -149,7 +145,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+        className="field-input"
       />
     </div>
   );

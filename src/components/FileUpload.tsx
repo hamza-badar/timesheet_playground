@@ -108,20 +108,19 @@ export default function FileUpload({ onFileLoaded }: FileUploadProps) {
 
   return (
     <div className="space-y-4">
-      {/* Drop zone */}
       <div
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         className={`
-          relative border-2 border-dashed rounded-2xl p-12 text-center
-          transition-all duration-200 cursor-pointer
+          relative border border-dashed rounded-2xl p-12 text-center
+          transition-all duration-200 cursor-pointer panel
           ${
             dragOver
-              ? "border-blue-500 bg-blue-50 scale-[1.02]"
+              ? "border-accent bg-accent-soft scale-[1.01]"
               : fileName
-                ? "border-green-400 bg-green-50"
-                : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
+                ? "border-success/40 bg-success-soft"
+                : "hover:border-line-strong"
           }
         `}
       >
@@ -134,38 +133,35 @@ export default function FileUpload({ onFileLoaded }: FileUploadProps) {
         <div className="flex flex-col items-center gap-3">
           {fileName ? (
             <>
-              <FileSpreadsheet className="w-12 h-12 text-green-600" />
-              <p className="text-lg font-semibold text-green-700">
-                {fileName}
-              </p>
-              <p className="text-sm text-green-600">
-                File loaded successfully. Drop another file to replace.
+              <FileSpreadsheet className="w-12 h-12 text-success" />
+              <p className="display-title text-lg text-ink">{fileName}</p>
+              <p className="text-sm text-muted">
+                File loaded. Drop another file to replace.
               </p>
             </>
           ) : (
             <>
-              <Upload className="w-12 h-12 text-gray-400" />
-              <p className="text-lg font-semibold text-gray-600">
+              <Upload className="w-12 h-12 text-accent" />
+              <p className="display-title text-lg text-ink">
                 Drop your Prosper Timesheet here
               </p>
-              <p className="text-sm text-gray-500">
-                or click to browse — accepts <code>.xlsx</code> files
+              <p className="text-sm text-muted">
+                or click to browse — accepts <code className="text-accent">.xlsx</code> files
               </p>
             </>
           )}
         </div>
       </div>
 
-      {/* URL input */}
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <div className="flex-1 h-px bg-gray-200" />
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <div className="flex-1 h-px bg-line" />
           <span>or load from URL</span>
-          <div className="flex-1 h-px bg-gray-200" />
+          <div className="flex-1 h-px bg-line" />
         </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint" />
             <input
               type="url"
               value={url}
@@ -177,14 +173,14 @@ export default function FileUpload({ onFileLoaded }: FileUploadProps) {
                 if (e.key === "Enter") handleUrlLoad();
               }}
               placeholder="Paste a public .xlsx URL (SharePoint links must be shared with 'Anyone')"
-              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="field-input pl-9"
               disabled={urlLoading}
             />
           </div>
           <button
             onClick={handleUrlLoad}
             disabled={urlLoading || !url.trim()}
-            className="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap transition-colors"
+            className="btn-primary whitespace-nowrap"
           >
             {urlLoading ? (
               <>
@@ -197,7 +193,7 @@ export default function FileUpload({ onFileLoaded }: FileUploadProps) {
           </button>
         </div>
         {urlError && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p className="text-sm text-danger bg-danger-soft border border-danger/20 rounded-xl px-3 py-2">
             {urlError}
           </p>
         )}
