@@ -8,12 +8,15 @@ import {
   Check,
   CalendarDays,
   FileSpreadsheet,
+  FileText,
   UserRound,
   X,
 } from "lucide-react";
 import dayjs from "dayjs";
 import {
   SHEET_STATUSES,
+  JOB_NAME_OPTIONS,
+  DEFAULT_NO_JIRA_JOB_NAME,
   buildMonthRows,
   isExportableFeedRow,
   isLeaveTask,
@@ -27,6 +30,7 @@ import {
 import { copyProsperBlock, exportProsperBlock } from "../lib/prosperSheetExport";
 import { exportTimelogs } from "../lib/exporter";
 import type { MemberConfig } from "../lib/types";
+import SprintSummary from "./SprintSummary";
 
 interface SheetBuilderProps {
   knownNames?: string[];
@@ -94,6 +98,13 @@ export default function SheetBuilder({
   const [newPersonName, setNewPersonName] = useState("");
   const [newPersonEmail, setNewPersonEmail] = useState("");
   const [newPersonEmployeeId, setNewPersonEmployeeId] = useState("");
+  const [jobNamePickerOpen, setJobNamePickerOpen] = useState(false);
+  const [jobNameDrafts, setJobNameDrafts] = useState<Record<string, string>>({});
+  const [pendingZoho, setPendingZoho] = useState<{
+    name: string;
+    configs: MemberConfig[];
+  } | null>(null);
+  const [builderTab, setBuilderTab] = useState<"lines" | "summary">("lines");
   const jiraRef = useRef<HTMLInputElement>(null);
   const skipSave = useRef(true);
 
@@ -142,6 +153,16 @@ export default function SheetBuilder({
 
   const exportableRowCount = useMemo(
     () => rows.filter(isExportableFeedRow).length,
+    [rows]
+  );
+
+  const summaryEntries = useMemo(
+    () => sheetFeedToTimelogEntries(personName.trim() || "Unnamed", rows),
+    [personName, rows]
+  );
+
+  const noJiraExportRows = useMemo(
+    () => rows.filter((r) => isExportableFeedRow(r) && !r.jiraId.trim()),
     [rows]
   );
 
@@ -199,8 +220,12 @@ export default function SheetBuilder({
     }
   };
 
-  const runZohoExport = (name: string, configs: MemberConfig[]) => {
-    const entries = sheetFeedToTimelogEntries(name, rows);
+  const runZohoExport = (
+    name: string,
+    configs: MemberConfig[],
+    sourceRows: SheetFeedRow[]
+  ) => {
+    const entries = sheetFeedToTimelogEntries(name, sourceRows);
     if (entries.length === 0) return;
 
     setExportingZoho(true);
@@ -217,6 +242,28 @@ export default function SheetBuilder({
     }
   };
 
+  const openJobNamePicker = (name: string, configs: MemberConfig[], sourceRows: SheetFeedRow[]) => {
+    const drafts: Record<string, string> = {};
+    for (const row of sourceRows) {
+      if (!isExportableFeedRow(row) || row.jiraId.trim()) continue;
+      drafts[row.id] = row.jobName?.trim() || DEFAULT_NO_JIRA_JOB_NAME;
+    }
+    setJobNameDrafts(drafts);
+    setPendingZoho({ name, configs });
+    setJobNamePickerOpen(true);
+  };
+
+  const beginZohoExport = (name: string, configs: MemberConfig[], sourceRows: SheetFeedRow[]) => {
+    const needsJobNames = sourceRows.some(
+      (r) => isExportableFeedRow(r) && !r.jiraId.trim()
+    );
+    if (needsJobNames) {
+      openJobNamePicker(name, configs, sourceRows);
+      return;
+    }
+    runZohoExport(name, configs, sourceRows);
+  };
+
   const assignPersonFromPicker = (name: string, configs: MemberConfig[]) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -230,7 +277,7 @@ export default function SheetBuilder({
     setNewPersonName("");
     setNewPersonEmail("");
     setNewPersonEmployeeId("");
-    runZohoExport(trimmed, configs);
+    beginZohoExport(trimmed, configs, rows);
   };
 
   const closePersonPicker = () => {
@@ -241,6 +288,24 @@ export default function SheetBuilder({
     setNewPersonEmployeeId("");
   };
 
+  const closeJobNamePicker = () => {
+    setJobNamePickerOpen(false);
+    setPendingZoho(null);
+    setJobNameDrafts({});
+  };
+
+  const handleConfirmJobNamesAndExport = () => {
+    if (!pendingZoho) return;
+    const nextRows = rows.map((row) => {
+      if (!(row.id in jobNameDrafts)) return row;
+      return { ...row, jobName: jobNameDrafts[row.id] };
+    });
+    setRows(nextRows);
+    const { name, configs } = pendingZoho;
+    closeJobNamePicker();
+    runZohoExport(name, configs, nextRows);
+  };
+
   const handleExportZoho = () => {
     if (exportableRowCount === 0) return;
     if (!personName.trim()) {
@@ -248,7 +313,7 @@ export default function SheetBuilder({
       setPersonPickerOpen(true);
       return;
     }
-    runZohoExport(personName, memberConfigs);
+    beginZohoExport(personName, memberConfigs, rows);
   };
 
   const handleSelectConfiguredPerson = (name: string) => {
@@ -494,6 +559,119 @@ export default function SheetBuilder({
         </div>
       )}
 
+      {jobNamePickerOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm"
+          onClick={closeJobNamePicker}
+        >
+          <div
+            className="panel w-full max-w-lg p-5 sm:p-6 space-y-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="zoho-job-name-title"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent mb-1">
+                  Zoho export
+                </p>
+                <h3
+                  id="zoho-job-name-title"
+                  className="display-title text-xl text-ink"
+                >
+                  Set Job Name
+                </h3>
+                <p className="text-sm text-muted mt-1.5 leading-relaxed">
+                  These lines have no Jira ID. Choose a Job Name for each before
+                  exporting Timelogs.
+                </p>
+              </div>
+              <button
+                onClick={closeJobNamePicker}
+                className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-surface-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <ul className="max-h-72 overflow-y-auto space-y-2 pr-1">
+              {noJiraExportRows.map((row) => (
+                <li
+                  key={row.id}
+                  className="rounded-xl border border-line px-3.5 py-3 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-ink truncate">{row.task}</p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {dayjs(row.date).format("D MMM YYYY")}
+                        {row.effort ? ` · ${row.effort}h` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="field-label">Job Name</label>
+                    <select
+                      value={jobNameDrafts[row.id] || DEFAULT_NO_JIRA_JOB_NAME}
+                      onChange={(e) =>
+                        setJobNameDrafts((prev) => ({
+                          ...prev,
+                          [row.id]: e.target.value,
+                        }))
+                      }
+                      className="field-input"
+                    >
+                      {JOB_NAME_OPTIONS.map((job) => (
+                        <option key={job} value={job}>
+                          {job}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex flex-wrap gap-2 justify-end pt-1">
+              <button type="button" onClick={closeJobNamePicker} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmJobNamesAndExport}
+                className="btn-primary"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Export Zoho Sheet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="segmented w-fit">
+        <button
+          onClick={() => setBuilderTab("lines")}
+          className={`segmented-item ${builderTab === "lines" ? "segmented-item-active" : ""}`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          Month lines
+        </button>
+        <button
+          onClick={() => setBuilderTab("summary")}
+          className={`segmented-item ${builderTab === "summary" ? "segmented-item-active" : ""}`}
+        >
+          <FileText className="w-4 h-4" />
+          Sprint Summary
+        </button>
+      </div>
+
+      {builderTab === "summary" && <SprintSummary entries={summaryEntries} />}
+
+      {builderTab === "lines" && (
+      <>
       <div className="panel p-5 sm:p-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="display-title text-xl text-ink">
@@ -695,6 +873,8 @@ export default function SheetBuilder({
           </p>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

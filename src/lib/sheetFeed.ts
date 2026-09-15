@@ -10,7 +10,18 @@ export interface SheetFeedRow {
   effort: number;
   status: string;
   sprint: string;
+  /** Used for Zoho export when Jira ID is empty. Ignored when Jira ID is set. */
+  jobName?: string;
 }
+
+export const JOB_NAME_OPTIONS = [
+  "Client Calls",
+  "Development",
+  "Internal Calls",
+  "Training",
+] as const;
+
+export const DEFAULT_NO_JIRA_JOB_NAME = "Client Calls";
 
 export interface SheetFeedState {
   personName: string;
@@ -231,9 +242,11 @@ export function newRowId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function inferJobName(jiraId: string): string {
+function inferJobName(jiraId: string, jobName?: string): string {
   if (jiraId && jiraId.trim().length > 0) return "Development";
-  return "Client Calls";
+  const trimmed = (jobName || "").trim();
+  if (trimmed) return trimmed;
+  return DEFAULT_NO_JIRA_JOB_NAME;
 }
 
 function normalizeStatus(status: string): string {
@@ -286,7 +299,7 @@ export function sheetFeedToTimelogEntries(
       effort: row.effort || 0,
       status: normalizeStatus(row.status),
       sprint: row.sprint,
-      jobName: inferJobName(row.jiraId),
+      jobName: inferJobName(row.jiraId, row.jobName),
       billing: "Billable",
     });
   }
