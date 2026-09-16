@@ -54,21 +54,21 @@ export const FEED_HEADERS = [
 
 const STORAGE_KEY = "timesheet-prosper-feed-v1";
 
-interface FeedStore {
+export interface SheetFeedStore {
   drafts: Record<string, SheetFeedState>;
   lastKey: string;
   knownNames: string[];
 }
 
-function emptyStore(): FeedStore {
+function emptyStore(): SheetFeedStore {
   return { drafts: {}, lastKey: "", knownNames: [] };
 }
 
-function readStore(): FeedStore {
+function readStore(): SheetFeedStore {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return emptyStore();
-    const parsed = JSON.parse(raw) as FeedStore;
+    const parsed = JSON.parse(raw) as SheetFeedStore;
     if (!parsed.drafts) return emptyStore();
     return parsed;
   } catch {
@@ -76,7 +76,7 @@ function readStore(): FeedStore {
   }
 }
 
-function writeStore(store: FeedStore) {
+function writeStore(store: SheetFeedStore) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   } catch {
@@ -111,6 +111,33 @@ export function saveFeed(state: SheetFeedState) {
     store.knownNames = [...store.knownNames, name].sort();
   }
   writeStore(store);
+}
+
+export function snapshotSheetFeedStore(): SheetFeedStore {
+  return readStore();
+}
+
+export function replaceSheetFeedStore(store: SheetFeedStore) {
+  if (!store || typeof store !== "object" || !store.drafts || typeof store.drafts !== "object") {
+    throw new Error("Invalid sheet builder backup");
+  }
+  const drafts: Record<string, SheetFeedState> = {};
+  for (const [key, value] of Object.entries(store.drafts)) {
+    if (!value || typeof value !== "object" || !Array.isArray(value.rows)) continue;
+    drafts[key] = {
+      personName: String(value.personName || ""),
+      year: Number(value.year) || 0,
+      month: Number(value.month) || 0,
+      rows: value.rows,
+    };
+  }
+  writeStore({
+    drafts,
+    lastKey: typeof store.lastKey === "string" ? store.lastKey : "",
+    knownNames: Array.isArray(store.knownNames)
+      ? store.knownNames.filter((n): n is string => typeof n === "string")
+      : [],
+  });
 }
 
 export function loadLastFeedHint(): {

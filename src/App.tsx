@@ -1,12 +1,14 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { Download, Table2, FileText, LayoutDashboard, CalendarPlus } from "lucide-react";
+import { Download, Table2, FileText, LayoutDashboard, CalendarPlus, Bell, Settings } from "lucide-react";
 import FileUpload from "./components/FileUpload";
 import TimelogTable from "./components/TimelogTable";
 import SprintSummary from "./components/SprintSummary";
 import TeamConfig from "./components/TeamConfig";
 import AddRecord from "./components/AddRecord";
 import SheetBuilder from "./components/SheetBuilder";
+import AlertTracker from "./components/AlertTracker";
+import DataSettings from "./components/DataSettings";
 import ThemeToggle from "./components/ThemeToggle";
 import { parseTimesheetWorkbook } from "./lib/parser";
 import { exportTimelogs } from "./lib/exporter";
@@ -29,7 +31,7 @@ function saveConfigs(configs: MemberConfig[]) {
 }
 
 type Tab = "table" | "summary";
-type AppMode = "converter" | "builder";
+type AppMode = "converter" | "builder" | "alerts" | "settings";
 
 export default function App() {
   const [entries, setEntries] = useState<TimelogEntry[]>([]);
@@ -37,6 +39,7 @@ export default function App() {
   const [memberConfigs, setMemberConfigs] = useState<MemberConfig[]>(loadSavedConfigs);
   const [activeTab, setActiveTab] = useState<Tab>("table");
   const [appMode, setAppMode] = useState<AppMode>("builder");
+  const [dataEpoch, setDataEpoch] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const filteredEntriesRef = useRef<TimelogEntry[]>([]);
 
@@ -126,7 +129,7 @@ export default function App() {
                   Timesheet
                 </h1>
                 <p className="text-[11px] sm:text-xs text-muted hidden sm:block">
-                  Prosper sheet builder &amp; timelog converter
+                  Prosper sheet builder, alerts &amp; timelog converter
                 </p>
               </div>
             </div>
@@ -141,11 +144,27 @@ export default function App() {
                   <span className="hidden sm:inline">Sheet builder</span>
                 </button>
                 <button
+                  onClick={() => setAppMode("alerts")}
+                  className={`segmented-item ${appMode === "alerts" ? "segmented-item-active" : ""}`}
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Alerts</span>
+                </button>
+                <button
                   onClick={() => setAppMode("converter")}
                   className={`segmented-item ${appMode === "converter" ? "segmented-item-active" : ""}`}
                 >
                   <Table2 className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Converter</span>
+                </button>
+                <button
+                  onClick={() => setAppMode("settings")}
+                  className={`segmented-item ${appMode === "settings" ? "segmented-item-active" : ""}`}
+                  aria-label="Data settings"
+                  title="Data settings"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Settings</span>
                 </button>
               </div>
               {isLoaded && appMode === "converter" && (
@@ -163,9 +182,27 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
         {appMode === "builder" && (
           <SheetBuilder
+            key={`builder-${dataEpoch}`}
             knownNames={uniqueUsers.length ? uniqueUsers : memberConfigs.map((c) => c.name)}
             memberConfigs={memberConfigs}
             onConfigsChange={handleConfigsChange}
+          />
+        )}
+
+        {appMode === "alerts" && (
+          <AlertTracker
+            key={`alerts-${dataEpoch}`}
+            knownNames={
+              uniqueUsers.length ? uniqueUsers : memberConfigs.map((c) => c.name)
+            }
+          />
+        )}
+
+        {appMode === "settings" && (
+          <DataSettings
+            memberConfigs={memberConfigs}
+            onImportMembers={handleConfigsChange}
+            onLocalDataImported={() => setDataEpoch((n) => n + 1)}
           />
         )}
 
