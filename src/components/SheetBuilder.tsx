@@ -149,6 +149,16 @@ export default function SheetBuilder({
     return map;
   }, [rows]);
 
+  const daysWithWork = useMemo(() => {
+    const dates = new Set<string>();
+    for (const r of rows) {
+      if (!r.date) continue;
+      if (isLeaveTask(r.task) || isLeaveTask(r.jiraId)) continue;
+      dates.add(r.date);
+    }
+    return dates.size;
+  }, [rows]);
+
   const dayHours = date ? hoursByDate.get(date) || 0 : 0;
 
   const exportableRowCount = useMemo(
@@ -777,7 +787,7 @@ export default function SheetBuilder({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Stat label="Lines" value={rows.length} />
         <Stat label="Hours" value={`${totalHours}h`} />
-        <Stat label="Days with work" value={hoursByDate.size} />
+        <Stat label="Days with work" value={daysWithWork} />
         <Stat label="Month days" value={monthDays} />
       </div>
 
