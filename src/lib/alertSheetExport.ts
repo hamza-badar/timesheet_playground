@@ -223,8 +223,14 @@ export function alertTrackingHtml(rows: AlertEntry[]): { html: string; tsv: stri
   return { html, tsv: tsvLines.join("\n") };
 }
 
-export async function copyAlertTracking(rows: AlertEntry[]): Promise<void> {
-  const { html, tsv } = alertTrackingHtml(rows);
+export async function copyAlertTracking(
+  rows: AlertEntry[],
+  dates?: string[]
+): Promise<void> {
+  const source = dates
+    ? rows.filter((row) => dates.includes(row.date))
+    : rows;
+  const { html, tsv } = alertTrackingHtml(source);
   if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
     await navigator.clipboard.write([
       new ClipboardItem({

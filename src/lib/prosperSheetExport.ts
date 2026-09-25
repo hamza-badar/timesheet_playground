@@ -175,8 +175,14 @@ export function prosperBlockHtml(opts: {
   year: number;
   month: number;
   rows: SheetFeedRow[];
+  dates?: string[];
 }): { html: string; tsv: string } {
-  const built = buildMonthRows(opts.year, opts.month, opts.rows);
+  let built = buildMonthRows(opts.year, opts.month, opts.rows);
+  const includeHeader = !opts.dates;
+  if (opts.dates) {
+    const wanted = new Set(opts.dates);
+    built = built.filter((row) => wanted.has(row.dateIso));
+  }
   const cellStyle = (kind: BuiltSheetRow["kind"], extra = "") =>
     `border:1px solid #000;padding:4px 8px;font-family:Calibri,Aptos Narrow,sans-serif;font-size:11px;background:${rowBg(kind)};${extra}`;
 
@@ -186,7 +192,7 @@ export function prosperBlockHtml(opts: {
   ).join("");
 
   const body: string[] = [];
-  const tsvLines: string[] = [FEED_HEADERS.join("\t")];
+  const tsvLines: string[] = includeHeader ? [FEED_HEADERS.join("\t")] : [];
 
   for (const row of built) {
     tsvLines.push(
@@ -212,7 +218,9 @@ export function prosperBlockHtml(opts: {
     );
   }
 
-  const html = `<table cellspacing="0" cellpadding="0"><thead><tr>${headerCells}</tr></thead><tbody>${body.join("")}</tbody></table>`;
+  const html = includeHeader
+    ? `<table cellspacing="0" cellpadding="0"><thead><tr>${headerCells}</tr></thead><tbody>${body.join("")}</tbody></table>`
+    : `<table cellspacing="0" cellpadding="0"><tbody>${body.join("")}</tbody></table>`;
   return { html, tsv: tsvLines.join("\n") };
 }
 
@@ -228,6 +236,7 @@ export async function copyProsperBlock(opts: {
   year: number;
   month: number;
   rows: SheetFeedRow[];
+  dates?: string[];
 }): Promise<void> {
   const { html, tsv } = prosperBlockHtml(opts);
   if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {

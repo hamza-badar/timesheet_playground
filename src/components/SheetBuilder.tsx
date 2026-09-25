@@ -31,6 +31,8 @@ import { copyProsperBlock, exportProsperBlock } from "../lib/prosperSheetExport"
 import { exportTimelogs } from "../lib/exporter";
 import type { MemberConfig } from "../lib/types";
 import SprintSummary from "./SprintSummary";
+import CopyDatesDialog from "./CopyDatesDialog";
+import { useLongPress } from "../lib/useLongPress";
 
 interface SheetBuilderProps {
   knownNames?: string[];
@@ -105,6 +107,8 @@ export default function SheetBuilder({
     configs: MemberConfig[];
   } | null>(null);
   const [builderTab, setBuilderTab] = useState<"lines" | "summary">("lines");
+  const [copyDatesOpen, setCopyDatesOpen] = useState(false);
+  const [copyingDates, setCopyingDates] = useState(false);
   const jiraRef = useRef<HTMLInputElement>(null);
   const skipSave = useRef(true);
 
@@ -353,6 +357,39 @@ export default function SheetBuilder({
     window.setTimeout(() => setCopied(false), 2000);
   };
 
+  const copyDateOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (!row.date) continue;
+      counts.set(row.date, (counts.get(row.date) || 0) + 1);
+    }
+    const start = dayjs(`${year}-${String(month).padStart(2, "0")}-01`);
+    const days = start.daysInMonth();
+    return Array.from({ length: days }, (_, i) => {
+      const iso = start.date(i + 1).format("YYYY-MM-DD");
+      return { date: iso, count: counts.get(iso) || 0 };
+    });
+  }, [year, month, rows]);
+
+  const handleCopySelectedDates = async (dates: string[]) => {
+    setCopyingDates(true);
+    try {
+      await copyProsperBlock({ year, month, rows, dates });
+      setCopyDatesOpen(false);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } finally {
+      setCopyingDates(false);
+    }
+  };
+
+  const copyPress = useLongPress({
+    onClick: () => {
+      void handleCopy();
+    },
+    onLongPress: () => setCopyDatesOpen(true),
+  });
+
   return (
     <div className="space-y-6">
       <div className="panel p-5 sm:p-6 space-y-5">
@@ -373,7 +410,11 @@ export default function SheetBuilder({
             </p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0 justify-end">
-            <button onClick={handleCopy} className="btn-secondary">
+            <button
+              {...copyPress}
+              className="btn-secondary select-none touch-manipulation"
+              title="Click to copy the month. Long-press to copy selected dates."
+            >
               {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
               {copied ? "Copied" : "Copy for Excel"}
             </button>
@@ -428,6 +469,19 @@ export default function SheetBuilder({
           </div>
         </div>
       </div>
+
+      {copyDatesOpen && (
+        <CopyDatesDialog
+          title="Copy selected dates"
+          dates={copyDateOptions}
+          initialSelected={date ? [date] : []}
+          copying={copyingDates}
+          onCancel={() => setCopyDatesOpen(false)}
+          onCopy={(dates) => {
+            void handleCopySelectedDates(dates);
+          }}
+        />
+      )}
 
       {personPickerOpen && (
         <div

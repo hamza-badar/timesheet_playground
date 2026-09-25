@@ -19,6 +19,8 @@ import {
   type AlertEntry,
 } from "../lib/alertFeed";
 import { copyAlertTracking, exportAlertTracking } from "../lib/alertSheetExport";
+import CopyDatesDialog from "./CopyDatesDialog";
+import { useLongPress } from "../lib/useLongPress";
 
 interface AlertTrackerProps {
   knownNames?: string[];
@@ -42,6 +44,8 @@ export default function AlertTracker({ knownNames = [] }: AlertTrackerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [copyDatesOpen, setCopyDatesOpen] = useState(false);
+  const [copyingDates, setCopyingDates] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const skipSave = useRef(true);
 
@@ -142,6 +146,40 @@ export default function AlertTracker({ knownNames = [] }: AlertTrackerProps) {
     }
   };
 
+  const copyDateOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (!row.date) continue;
+      counts.set(row.date, (counts.get(row.date) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => ({ date, count }));
+  }, [rows]);
+
+  const handleCopySelectedDates = async (dates: string[]) => {
+    setCopyingDates(true);
+    try {
+      await copyAlertTracking(rows, dates);
+      setCopyDatesOpen(false);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error(err);
+      window.alert("Could not copy. Use Export sheet instead, or allow clipboard access.");
+    } finally {
+      setCopyingDates(false);
+    }
+  };
+
+  const copyPress = useLongPress({
+    disabled: rows.length === 0,
+    onClick: () => {
+      void handleCopy();
+    },
+    onLongPress: () => setCopyDatesOpen(true),
+  });
+
   return (
     <div className="space-y-6">
       <div className="panel p-5 sm:p-6 space-y-5">
@@ -162,9 +200,10 @@ export default function AlertTracker({ knownNames = [] }: AlertTrackerProps) {
           </div>
           <div className="flex flex-wrap gap-2 shrink-0 justify-end">
             <button
-              onClick={handleCopy}
+              {...copyPress}
               disabled={rows.length === 0}
-              className="btn-secondary"
+              className="btn-secondary select-none touch-manipulation"
+              title="Click to copy all alerts. Long-press to copy selected dates."
             >
               {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
               {copied ? "Copied" : "Copy for Excel"}
@@ -180,6 +219,20 @@ export default function AlertTracker({ knownNames = [] }: AlertTrackerProps) {
           </div>
         </div>
       </div>
+
+      {copyDatesOpen && (
+        <CopyDatesDialog
+          title="Copy selected dates"
+          dates={copyDateOptions}
+          initialSelected={draft.date ? [draft.date] : []}
+          countLabel="alert"
+          copying={copyingDates}
+          onCancel={() => setCopyDatesOpen(false)}
+          onCopy={(dates) => {
+            void handleCopySelectedDates(dates);
+          }}
+        />
+      )}
 
       <div className="panel p-5 sm:p-6 space-y-4">
         <div className="flex items-center justify-between gap-3">
